@@ -527,5 +527,6 @@ def build_add_wallet_conversation() -> ConversationHandler:
             MessageHandler(filters.Regex(r"^❌ Cancel$"), _cancel),
         ],
         allow_reentry=True,
+        per_message=False,      # suppress PTBUserWarning for CallbackQueryHandler
         name="add_wallet_conv",
     )
