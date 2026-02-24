@@ -743,6 +743,17 @@ def format_trade_alert(
         truncated  = market_title[:60] + ("\u2026" if len(market_title) > 60 else "")
         title_part = f"\n    \u2022 {_esc(truncated)}"
 
+    # Show how long ago the trade happened vs now (Polymarket API indexing lag)
+    import time as _time
+    now_ts     = int(_time.time())
+    age_secs   = max(0, now_ts - timestamp) if timestamp else 0
+    if age_secs < 60:
+        age_str = f"{age_secs}s ago"
+    elif age_secs < 3600:
+        age_str = f"{age_secs // 60}m {age_secs % 60}s ago"
+    else:
+        age_str = f"{age_secs // 3600}h ago"
+
     return "\n".join([
         "\U0001f514 *New Polymarket Trade\\!*\n",
         f"\U0001f464 *Wallet:* {_esc(wallet_disp)}",
@@ -750,7 +761,7 @@ def format_trade_alert(
         f"{emoji} *{_esc(trade_type)}*{outcome_str} \u2014 "
         f"`{_esc(size_str)}` shares @ `${price:.3f}`{title_part}\n",
         f"\U0001f4b5 *Value:* \u2248`${usd_value:,.2f}`",
-        f"\U0001f4c5 {_esc(dt_str)}\n",
+        f"\U0001f4c5 *Traded:* {_esc(dt_str)} _\\({_esc(age_str)}\\)_\n",
         f"[\U0001f517 View wallet activity]({polymarket_url})",
     ])
 

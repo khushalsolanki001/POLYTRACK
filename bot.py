@@ -130,7 +130,7 @@ from handlers import (
 load_dotenv()  # reads .env from project root
 
 LOG_LEVEL     = os.getenv("LOG_LEVEL", "INFO").upper()
-POLL_INTERVAL = int(os.getenv("POLL_INTERVAL", "20"))   # default 20 s for responsiveness
+POLL_INTERVAL = int(os.getenv("POLL_INTERVAL", "10"))   # default 10 s — Polymarket API itself has ~2-4 min indexing lag
 BOT_TOKEN     = os.getenv("BOT_TOKEN", "")
 
 # Console + rotating file logging
