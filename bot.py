@@ -87,7 +87,15 @@ bot.py — PolyTrack Telegram Bot — Entry Point
 import asyncio
 import logging
 import os
+import sys
 from datetime import datetime, timezone
+
+# Force UTF-8 output on Windows (avoids cp1252 UnicodeEncodeError for emoji in logs)
+if sys.stdout.encoding.lower() != "utf-8":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if sys.stderr.encoding.lower() != "utf-8":
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 
 from dotenv import load_dotenv
 from telegram import Bot
@@ -121,9 +129,9 @@ from handlers import (
 
 load_dotenv()  # reads .env from project root
 
-LOG_LEVEL    = os.getenv("LOG_LEVEL", "INFO").upper()
-POLL_INTERVAL = int(os.getenv("POLL_INTERVAL", "45"))
-BOT_TOKEN    = os.getenv("BOT_TOKEN", "")
+LOG_LEVEL     = os.getenv("LOG_LEVEL", "INFO").upper()
+POLL_INTERVAL = int(os.getenv("POLL_INTERVAL", "20"))   # default 20 s for responsiveness
+BOT_TOKEN     = os.getenv("BOT_TOKEN", "")
 
 # Console + rotating file logging
 logging.basicConfig(
@@ -146,110 +154,152 @@ async def poll_trades(context) -> None:
     """
     Called by JobQueue every POLL_INTERVAL seconds.
 
-    Iterates every watched_wallet row across all users:
-      1. Fetches recent trades from Polymarket
-      2. Filters by timestamp, only_buys, and min_usd_threshold
-      3. Sends alert messages to the wallet owner's chat
-      4. Updates last_timestamp so we don't re-alert
+    For each watched wallet (across all users):
+      1. Fetch recent trades from Polymarket Data API.
+      2. If last_timestamp == 0 (first run): silently set cursor to newest
+         trade so we don't spam historical alerts on startup.
+      3. For genuinely NEW trades: apply filters, send alert.
+      4. Persist updated last_timestamp so we never re-alert.
     """
+    import time as _time
+
     bot: Bot = context.bot
     wallets   = db.get_all_wallets()
 
     if not wallets:
-        return  # Nothing to poll
+        logger.debug("Poll cycle: no wallets configured.")
+        return
 
-    logger.debug("Poll cycle — checking %d wallet(s)", len(wallets))
+    logger.info("🔄 Poll cycle — %d wallet(s) to check", len(wallets))
 
     for row in wallets:
-        wallet_id   = row["id"]
-        address     = row["wallet_address"]
-        chat_id     = row["chat_id"]
-        nickname    = row["nickname"]
-        min_usd     = row["min_usd_threshold"]
-        only_buys   = bool(row["only_buys"])
-        last_ts     = row["last_timestamp"]
+        wallet_id = row["id"]
+        address   = row["wallet_address"]
+        chat_id   = row["chat_id"]
+        nickname  = row["nickname"]
+        min_usd   = row["min_usd_threshold"]
+        only_buys = bool(row["only_buys"])
+        last_ts   = row["last_timestamp"]
+
+        label = nickname or f"{address[:8]}…"
+        logger.info("  Checking: %s (last_ts=%d)", label, last_ts)
 
         try:
-            trades = await api.fetch_trades(address)
-        except Exception as exc:  # noqa: BLE001 — never crash the job loop
-            logger.error("Error fetching trades for %s: %s", address[:10], exc)
+            trades = await api.fetch_trades(address, limit=20)
+        except Exception as exc:
+            logger.error("API error for %s: %s", label, exc)
             continue
 
         if not trades:
+            logger.info("  No trades returned for %s", label)
             continue
 
-        # Determine the highest timestamp we'll see this cycle
-        new_max_ts = last_ts
+        logger.info("  Got %d trades for %s", len(trades), label)
 
-        # Trades are newest-first; process oldest-first so alerts arrive in order
+        # ── FIRST RUN: Initialize cursor silently ───────────────────────────
+        # last_ts == 0 means this wallet was just added and has never been
+        # polled. We set the cursor to the newest trade so we only alert on
+        # truly NEW trades going forward, not dump all history.
+        if last_ts == 0:
+            newest_ts = max(
+                (api.parse_trade_timestamp(t) for t in trades), default=0
+            )
+            init_ts = newest_ts if newest_ts > 0 else int(_time.time())
+            db.update_last_timestamp(wallet_id, init_ts)
+            logger.info(
+                "  📍 First poll for %s — cursor initialised to %d (no alerts)",
+                label, init_ts,
+            )
+            continue  # Don't send alerts for existing trades
+
+        # ── Process new trades (oldest-first so alerts arrive in order) ─────
+        new_max_ts  = last_ts
+        alerts_sent = 0
+
         for trade in reversed(trades):
-            ts        = api.parse_trade_timestamp(trade)
+            ts         = api.parse_trade_timestamp(trade)
             trade_type = api.parse_trade_type(trade)
-            size      = api.parse_trade_size(trade)
-            price     = api.parse_trade_price(trade)
-            usd_value = api.parse_trade_usd_value(trade)
-            outcome   = api.parse_trade_outcome(trade)
-            market_id = api.parse_market_id(trade)
+            size       = api.parse_trade_size(trade)
+            price      = api.parse_trade_price(trade)
+            usd_value  = api.parse_trade_usd_value(trade)
+            outcome    = api.parse_trade_outcome(trade)
+
+            logger.debug(
+                "    Trade ts=%d last_ts=%d type=%s size=%.2f price=%.3f usd=%.2f",
+                ts, last_ts, trade_type, size, price, usd_value,
+            )
 
             # ── Skip already-seen trades ────────────────────────────────────
             if ts <= last_ts:
+                logger.debug("    ↩ Skipped (already seen, ts=%d)", ts)
                 continue
 
             # ── Apply user filters ──────────────────────────────────────────
             if only_buys and trade_type != "BUY":
-                new_max_ts = max(new_max_ts, ts)  # still advance cursor
-                continue
-
-            if usd_value < min_usd:
+                logger.info("  ⏭ Filtered (only_buys=True, got %s)", trade_type)
                 new_max_ts = max(new_max_ts, ts)
                 continue
 
-            # ── Fetch market title (optional, best-effort) ──────────────────
-            market_title = None
-            if market_id:
-                try:
-                    market_title = await api.fetch_market_title(market_id)
-                except Exception:  # noqa: BLE001
-                    pass
+            if usd_value < min_usd:
+                logger.info(
+                    "  ⏭ Filtered (usd_value=%.2f < min_usd=%.2f)",
+                    usd_value, min_usd,
+                )
+                new_max_ts = max(new_max_ts, ts)
+                continue
 
-            # ── Build Polymarket profile URL ────────────────────────────────
+            # ── Get market title (from trade directly — no extra HTTP call) ──
+            market_title = api.get_trade_title(trade)
+
+            # ── Build alert ──────────────────────────────────────────────────
             poly_url = f"https://polymarket.com/profile/{address}?tab=activity"
 
-            # ── Format & send the alert ─────────────────────────────────────
             msg = format_trade_alert(
-                trade_type    = trade_type,
-                size          = size,
-                price         = price,
-                usd_value     = usd_value,
-                outcome       = outcome,
-                market_title  = market_title,
+                trade_type     = trade_type,
+                size           = size,
+                price          = price,
+                usd_value      = usd_value,
+                outcome        = outcome,
+                market_title   = market_title,
                 wallet_address = address,
-                nickname      = nickname,
-                timestamp     = ts,
+                nickname       = nickname,
+                timestamp      = ts,
                 polymarket_url = poly_url,
             )
 
+            # ── Send alert ───────────────────────────────────────────────────
             try:
                 await bot.send_message(
-                    chat_id    = chat_id,
-                    text       = msg,
-                    parse_mode = ParseMode.MARKDOWN_V2,
+                    chat_id                  = chat_id,
+                    text                     = msg,
+                    parse_mode               = ParseMode.MARKDOWN_V2,
                     disable_web_page_preview = True,
                 )
+                alerts_sent += 1
                 logger.info(
-                    "Alert sent → chat %s | wallet %s | %s $%.2f",
-                    chat_id, address[:10], trade_type, usd_value,
+                    "  🔔 Alert sent → chat=%s wallet=%s %s $%.2f",
+                    chat_id, label, trade_type, usd_value,
                 )
-            except Exception as send_exc:  # noqa: BLE001
-                logger.error("Failed to send alert to chat %s: %s", chat_id, send_exc)
+            except Exception as send_exc:
+                logger.error(
+                    "  ❌ Failed to send alert to chat=%s: %s",
+                    chat_id, send_exc,
+                )
+                # Still advance cursor so we don't retry this broken message
 
             new_max_ts = max(new_max_ts, ts)
 
-        # ── Persist the highest timestamp seen ──────────────────────────────
+        # ── Persist updated cursor ───────────────────────────────────────────
         if new_max_ts > last_ts:
             db.update_last_timestamp(wallet_id, new_max_ts)
+            logger.info(
+                "  💾 Cursor updated for %s: %d → %d (%d alert(s) sent)",
+                label, last_ts, new_max_ts, alerts_sent,
+            )
+        else:
+            logger.info("  ✅ No new trades for %s", label)
 
-    logger.debug("Poll cycle complete.")
+    logger.info("🔄 Poll cycle complete.")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -304,9 +354,17 @@ def main() -> None:
     app.job_queue.run_repeating(
         poll_trades,
         interval = POLL_INTERVAL,
-        first    = 10,          # first run 10 seconds after startup
+        first    = 5,           # first run just 5 s after startup
         name     = "poll_trades",
     )
+
+    # ── Global error handler (logs all unhandled exceptions) ──────────────
+    async def _error_handler(update, context) -> None:
+        logger.error(
+            "Unhandled exception (update=%s): %s",
+            update, context.error, exc_info=context.error,
+        )
+    app.add_error_handler(_error_handler)
 
     logger.info(
         "✅ Bot is running. Polling interval: %ds. Press Ctrl+C to stop.",

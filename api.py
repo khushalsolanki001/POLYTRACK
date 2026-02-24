@@ -4,9 +4,21 @@ api.py — Polymarket API client for PolyTrack Bot
 All HTTP calls to Polymarket's public APIs go through this module.
 Uses aiohttp for non-blocking I/O so the bot event loop never stalls.
 
-Public endpoints used:
-  • https://data-api.polymarket.com/trades   – trade history per wallet
-  • https://gamma-api.polymarket.com/markets – market metadata (title, slug)
+Confirmed API response shape (from live data-api.polymarket.com):
+  {
+    "proxyWallet":    "0x...",
+    "side":           "BUY" | "SELL",
+    "asset":          "...",
+    "conditionId":    "0x...",
+    "size":           1.5,           ← float, shares
+    "price":          0.47,          ← float, USD per share
+    "timestamp":      1740400000,    ← int, Unix seconds ✅
+    "title":          "Will X...",   ← market title already included!
+    "slug":           "will-x-...",
+    "outcome":        "Yes" | "No" | "Up" | "Down"  ← human label
+    "outcomeIndex":   0 | 1,
+    ...
+  }
 """
 
 import logging
@@ -20,13 +32,12 @@ logger = logging.getLogger(__name__)
 TRADES_BASE_URL  = "https://data-api.polymarket.com/trades"
 MARKETS_BASE_URL = "https://gamma-api.polymarket.com/markets"
 
-# Shared client session; created once and reused across all poll cycles
+# Shared client session (created once, reused)
 _session: Optional[aiohttp.ClientSession] = None
 
-# Simple in-memory cache for market titles: market_id → title string
+# In-memory cache for market titles looked up via Gamma API
 _market_cache: dict[str, str] = {}
 
-# Timeout for every API call
 _TIMEOUT = aiohttp.ClientTimeout(total=15)
 
 
@@ -35,21 +46,16 @@ _TIMEOUT = aiohttp.ClientTimeout(total=15)
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def get_session() -> aiohttp.ClientSession:
-    """
-    Return (or lazily create) the shared aiohttp session.
-    Call close_session() when the bot shuts down.
-    """
     global _session
     if _session is None or _session.closed:
         _session = aiohttp.ClientSession(
             timeout=_TIMEOUT,
-            headers={"User-Agent": "PolyTrackBot/1.0 (+github.com/polytrack)"},
+            headers={"User-Agent": "PolyTrackBot/1.0"},
         )
     return _session
 
 
 async def close_session() -> None:
-    """Gracefully close the shared HTTP session on bot shutdown."""
     global _session
     if _session and not _session.closed:
         await _session.close()
@@ -60,15 +66,10 @@ async def close_session() -> None:
 #  Trade fetching
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def fetch_trades(wallet: str, limit: int = 15) -> list[dict[str, Any]]:
+async def fetch_trades(wallet: str, limit: int = 20) -> list[dict[str, Any]]:
     """
     Fetch recent trades for *wallet* from Polymarket Data API.
-
-    Returns a list of trade dicts (may be empty on error).
-    Always sorted newest-first by the API.
-
-    Each trade dict contains at minimum:
-        id, type (BUY/SELL), size, price, timestamp, market (condition_id/slug)
+    Returns a list sorted newest-first.  Returns [] on any error.
     """
     params = {
         "user":          wallet.lower(),
@@ -81,51 +82,54 @@ async def fetch_trades(wallet: str, limit: int = 15) -> list[dict[str, Any]]:
         async with session.get(TRADES_BASE_URL, params=params) as resp:
             if resp.status == 200:
                 data = await resp.json(content_type=None)
-                # API may return a list directly or a dict with a data key
                 if isinstance(data, list):
                     return data
                 if isinstance(data, dict):
                     return data.get("data", data.get("trades", []))
                 return []
-            else:
-                logger.warning(
-                    "Polymarket trades API returned %s for wallet %s",
-                    resp.status, wallet[:10],
-                )
-                return []
+            logger.warning("Polymarket API %s for wallet %s", resp.status, wallet[:10])
+            return []
     except asyncio.TimeoutError:
         logger.warning("Timeout fetching trades for %s", wallet[:10])
         return []
     except aiohttp.ClientError as exc:
-        logger.error("HTTP error fetching trades for %s: %s", wallet[:10], exc)
+        logger.error("HTTP error for %s: %s", wallet[:10], exc)
         return []
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Market title fetching (with in-memory cache)
+#  Market title — from trade itself first, Gamma API as fallback
 # ─────────────────────────────────────────────────────────────────────────────
+
+def get_trade_title(trade: dict) -> Optional[str]:
+    """
+    Extract market title directly from the trade dict.
+    The Polymarket Data API already includes 'title' in every trade row,
+    so no extra HTTP call is needed in most cases.
+    """
+    return (
+        trade.get("title")
+        or trade.get("question")
+        or trade.get("name")
+        or None
+    )
+
 
 async def fetch_market_title(market_id: str) -> Optional[str]:
     """
-    Try to resolve a human-readable title for a market.
-    Returns None if not found or on error (caller shows market_id instead).
-    Results are cached to avoid hammering the API.
+    Fallback: look up a title from the Gamma API when the trade lacks one.
+    Results are cached in memory.
     """
     if not market_id:
         return None
-
-    # Return cached value immediately
     if market_id in _market_cache:
         return _market_cache[market_id]
 
     session = await get_session()
-    # Gamma API accepts either condition_id or a numeric id
-    url = f"{MARKETS_BASE_URL}/{market_id}"
     try:
-        async with session.get(url) as resp:
+        async with session.get(f"{MARKETS_BASE_URL}/{market_id}") as resp:
             if resp.status == 200:
                 data = await resp.json(content_type=None)
-                # Response may be a single dict or a list
                 if isinstance(data, list) and data:
                     data = data[0]
                 title = (
@@ -136,19 +140,18 @@ async def fetch_market_title(market_id: str) -> Optional[str]:
                 if title:
                     _market_cache[market_id] = str(title)
                     return str(title)
-            # Non-200 → silently skip, not critical
-    except Exception as exc:  # noqa: BLE001
-        logger.debug("Could not fetch market title for %s: %s", market_id, exc)
+    except Exception as exc:
+        logger.debug("Gamma API lookup failed for %s: %s", market_id, exc)
 
     return None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Trade parsing helpers
+#  Trade field parsers — validated against live API response
 # ─────────────────────────────────────────────────────────────────────────────
 
 def parse_trade_type(trade: dict) -> str:
-    """Normalise trade type to 'BUY' or 'SELL'."""
+    """Return 'BUY' or 'SELL'. API uses 'side' field."""
     raw = str(trade.get("side") or trade.get("type") or trade.get("tradeType") or "").upper()
     if "BUY" in raw:
         return "BUY"
@@ -158,26 +161,23 @@ def parse_trade_type(trade: dict) -> str:
 
 
 def parse_trade_size(trade: dict) -> float:
-    """Return shares traded as a float (0.0 on parse error)."""
-    raw = trade.get("size") or trade.get("amount") or 0
+    """Shares traded as float."""
     try:
-        return float(raw)
+        return float(trade.get("size") or trade.get("amount") or 0)
     except (TypeError, ValueError):
         return 0.0
 
 
 def parse_trade_price(trade: dict) -> float:
-    """Return price per share in USD [0,1] as a float."""
-    raw = trade.get("price") or trade.get("outcomePrice") or 0
+    """Price per share (0–1 USD)."""
     try:
-        return float(raw)
+        return float(trade.get("price") or trade.get("outcomePrice") or 0)
     except (TypeError, ValueError):
         return 0.0
 
 
 def parse_trade_usd_value(trade: dict) -> float:
-    """Compute approximate USD value of the trade."""
-    # Some responses include a pre-computed value field
+    """USD value of trade: size × price (no special field in this API)."""
     if "usdcSize" in trade:
         try:
             return float(trade["usdcSize"])
@@ -187,17 +187,26 @@ def parse_trade_usd_value(trade: dict) -> float:
 
 
 def parse_trade_outcome(trade: dict) -> str:
-    """Return YES, NO, or empty string."""
-    return str(trade.get("outcome") or trade.get("side") or "").upper()
+    """
+    Return the human label for which outcome was traded
+    (e.g. 'Yes', 'No', 'Up', 'Down').
+    The 'outcome' field contains this; do NOT fall back to 'side' here.
+    """
+    val = trade.get("outcome") or ""
+    return str(val).strip()
 
 
 def parse_trade_timestamp(trade: dict) -> int:
-    """Return Unix epoch (seconds) for the trade, or 0 on failure."""
+    """
+    Return Unix epoch in seconds.
+    The live API returns 'timestamp' as an integer (seconds).
+    Handles the case where it comes back as a float or string too.
+    """
     raw = trade.get("timestamp") or trade.get("createdAt") or trade.get("time") or 0
     try:
-        ts = int(raw)
-        # If microseconds / milliseconds, convert to seconds
-        if ts > 1_000_000_000_000:
+        ts = int(float(str(raw)))        # handles int, float, "1234567890"
+        # Convert milliseconds to seconds if needed
+        if ts > 9_999_999_999:
             ts = ts // 1000
         return ts
     except (TypeError, ValueError):
@@ -205,11 +214,11 @@ def parse_trade_timestamp(trade: dict) -> int:
 
 
 def parse_market_id(trade: dict) -> str:
-    """Return the market identifier string (condition_id, slug, etc.)."""
+    """Return the conditionId or slug for secondary title lookup."""
     return str(
         trade.get("conditionId")
         or trade.get("market")
+        or trade.get("slug")
         or trade.get("marketSlug")
-        or trade.get("marketId")
         or ""
     )

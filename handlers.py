@@ -1,4 +1,4 @@
-"""
+﻿"""
 handlers.py — Telegram command & conversation handlers for PolyTrack Bot
 =========================================================================
 Defines every handler that the ApplicationBuilder registers:
@@ -53,7 +53,7 @@ MAX_WALLETS = 10
 
 # ─── All menu button labels (used in fallback matching) ──────────────────────
 MENU_BUTTONS = frozenset(
-    ["➕ Add Wallet", "📋 My Wallets", "🗑️ Remove Wallet", "🕐 History", "❓ Help"]
+    ["\u2795 Add Wallet", "\U0001f4cb My Wallets", "\U0001f5d1\ufe0f Remove Wallet", "\U0001f550 History", "\u2753 Help"]
 )
 
 
@@ -65,18 +65,18 @@ def _main_menu_keyboard() -> ReplyKeyboardMarkup:
     """Persistent bottom keyboard shown after /start."""
     return ReplyKeyboardMarkup(
         [
-            ["➕ Add Wallet",  "📋 My Wallets"],
-            ["🕐 History",     "🗑️ Remove Wallet"],
-            ["❓ Help"],
+            ["\u2795 Add Wallet",  "\U0001f4cb My Wallets"],
+            ["\U0001f550 History",  "\U0001f5d1\ufe0f Remove Wallet"],
+            ["\u2753 Help"],
         ],
         resize_keyboard=True,
-        input_field_placeholder="Choose an option…",
+        input_field_placeholder="Choose an option\u2026",
     )
 
 
 def _cancel_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
-        [["❌ Cancel"]],
+        [["\u274c Cancel"]],
         resize_keyboard=True,
         one_time_keyboard=True,
     )
@@ -86,7 +86,7 @@ def _esc(text: str) -> str:
     """
     Escape special MarkdownV2 characters.
     NOTE: We intentionally do NOT use ~ in any message templates (it triggers
-    strikethrough formatting). Use the ≈ character instead for 'approximately'.
+    strikethrough formatting). Use the \u2248 character instead for 'approximately'.
     """
     special = r"\_*[]()~`>#+-=|{}.!"
     return "".join(f"\\{c}" if c in special else c for c in str(text))
@@ -105,18 +105,18 @@ def _build_trade_line(
 ) -> str:
     """
     Build one trade line for history display.
-    Uses ≈ (U+2248) instead of ~ to show 'approximately', avoiding
+    Uses \u2248 (U+2248) instead of ~ to show 'approximately', avoiding
     Telegram's strikethrough parser which treats ~ as a formatting marker.
     """
     title_line = ""
     if market_title:
-        truncated = market_title[:55] + ("…" if len(market_title) > 55 else "")
-        title_line = f"\n    • {_esc(truncated)}"
+        truncated = market_title[:55] + ("\u2026" if len(market_title) > 55 else "")
+        title_line = f"\n    \u2022 {_esc(truncated)}"
 
     return (
-        f"*{i}\\.* {emoji} *{_esc(t_type)}*{outcome_str} — "
+        f"*{i}\\.*  {emoji} *{_esc(t_type)}*{outcome_str} \u2014 "
         f"`{_esc(size_str)}` shares @ `${price:.3f}`{title_line}\n"
-        f"    💵 ≈`${usd_value:,.2f}` \\| 📅 {_esc(dt_str)}"
+        f"    \U0001f4b5 \u2248`${usd_value:,.2f}` \\| \U0001f4c5 {_esc(dt_str)}"
     )
 
 
@@ -129,15 +129,15 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     db.upsert_user(user.id, user.username, update.effective_chat.id)
 
     await update.message.reply_text(
-        f"👋 *Welcome to PolyTrack, {_esc(user.first_name)}\\!*\n\n"
+        f"\U0001f44b *Welcome to PolyTrack, {_esc(user.first_name)}\\!*\n\n"
         "I'm your personal Polymarket trade monitor\\. "
         "Add any public wallet address and I'll ping you the moment a trade lands\\.\n\n"
-        "🔍 *What I can do:*\n"
-        "• Track multiple wallets simultaneously\n"
-        "• Filter by minimum trade size \\(USD\\)\n"
-        "• Alert only on BUY trades if you prefer\n"
-        "• Show the last 5 trades of any wallet on demand\n"
-        "• Send rich, real\\-time notifications\n\n"
+        "\U0001f50d *What I can do:*\n"
+        "\u2022 Track multiple wallets simultaneously\n"
+        "\u2022 Filter by minimum trade size \\(USD\\)\n"
+        "\u2022 Alert only on BUY trades if you prefer\n"
+        "\u2022 Show the last 5 trades of any wallet on demand\n"
+        "\u2022 Send rich, real\\-time notifications\n\n"
         "Use the menu below to get started\\!",
         parse_mode=ParseMode.MARKDOWN_V2,
         reply_markup=_main_menu_keyboard(),
@@ -149,20 +149,25 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 HELP_TEXT = (
-    "🤖 *PolyTrack Bot — Help*\n\n"
+    "\U0001f916 *PolyTrack Bot \u2014 Help*\n\n"
     "*Commands:*\n"
-    "  /start — Show main menu\n"
-    "  /add\\_wallet — Add a wallet to track\n"
-    "  /my\\_wallets — List your tracked wallets\n"
-    "  /history \\[address\\] — Show last 5 trades\n"
-    "  /remove\\_wallet — Stop tracking a wallet\n"
-    "  /help — This message\n\n"
+    "  /start \u2014 Show main menu\n"
+    "  /add\\_wallet \u2014 Add a wallet to track\n"
+    "  /my\\_wallets \u2014 List your tracked wallets\n"
+    "  /history \\[address\\] \u2014 Show last 5 trades\n"
+    "  /remove\\_wallet \u2014 Stop tracking a wallet\n"
+    "  /help \u2014 This message\n\n"
     "*How it works:*\n"
-    "Every 45 seconds I query the Polymarket Data API for new trades "
+    "Every 20 seconds I query the official Polymarket Data API for new trades "
     "on each wallet you're watching\\. "
     "When a trade matches your filters, I send you an alert\\.\n\n"
+    "*Which wallet address to use?*\n"
+    "Use your *Polymarket proxy wallet* address \u2014 the `0x\u2026` address shown "
+    "in your Polymarket portfolio URL or profile page\\. "
+    "This is *not* your MetaMask/EOA address; it's the smart contract wallet "
+    "Polymarket creates for you on first login\\.\n\n"
     "*Testing:*\n"
-    "Use 🕐 *History* \\(or `/history 0x…`\\) to instantly see the last "
+    "Use \U0001f550 *History* \\(or `/history 0x\u2026`\\) to instantly see the last "
     "5 trades of any wallet without waiting for a poll cycle\\.\n\n"
     "*Privacy:*\n"
     "Only *public* on\\-chain wallet addresses are used\\. "
@@ -189,27 +194,27 @@ async def cmd_my_wallets(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     if not rows:
         await update.message.reply_text(
-            "📭 You're not tracking any wallets yet\\.\n"
-            "Tap *➕ Add Wallet* to get started\\!",
+            "\U0001f4ed You're not tracking any wallets yet\\.\n"
+            "Tap *\u2795 Add Wallet* to get started\\!",
             parse_mode=ParseMode.MARKDOWN_V2,
             reply_markup=_main_menu_keyboard(),
         )
         return
 
-    lines = ["📋 *Your Tracked Wallets*\n"]
+    lines = ["\U0001f4cb *Your Tracked Wallets*\n"]
     for row in rows:
         addr     = row["wallet_address"]
-        nick     = row["nickname"] or "—"
+        nick     = row["nickname"] or "\u2014"
         min_usd  = row["min_usd_threshold"]
-        only_buy = "✅ Yes" if row["only_buys"] else "❌ No"
-        short    = f"`{addr[:6]}…{addr[-4:]}`"
+        only_buy = "\u2705 Yes" if row["only_buys"] else "\u274c No"
+        short    = f"`{addr[:6]}\u2026{addr[-4:]}`"
         lines.append(
             f"*{_esc(nick)}* \\({short}\\)\n"
-            f"  💵 Min USD: `${min_usd:.0f}` \\| Buys only: {only_buy}\n"
-            f"  🆔 ID: `{row['id']}`\n"
+            f"  \U0001f4b5 Min USD: `${min_usd:.0f}` \\| Buys only: {only_buy}\n"
+            f"  \U0001f194 ID: `{row['id']}`\n"
         )
 
-    lines.append("_Tap 🗑️ Remove Wallet to stop tracking one\\._")
+    lines.append("_Tap \U0001f5d1\ufe0f Remove Wallet to stop tracking one\\._")
 
     await update.message.reply_text(
         "\n".join(lines),
@@ -237,7 +242,7 @@ async def cmd_history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         wallet = context.args[0].strip()
         if not WALLET_RE.match(wallet):
             await update.message.reply_text(
-                "❌ Invalid wallet address\\.\n"
+                "\u274c Invalid wallet address\\.\n"
                 "Must start with `0x` followed by 40\\-42 hex characters\\.\n\n"
                 "Example: `/history 0xAbCd1234`",
                 parse_mode=ParseMode.MARKDOWN_V2,
@@ -252,7 +257,7 @@ async def cmd_history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     if not rows:
         await update.message.reply_text(
-            "📭 You have no tracked wallets yet\\.\n\n"
+            "\U0001f4ed You have no tracked wallets yet\\.\n\n"
             "You can also check any wallet directly:\n"
             "`/history 0xYourWalletAddress`",
             parse_mode=ParseMode.MARKDOWN_V2,
@@ -268,17 +273,17 @@ async def cmd_history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     # Multiple wallets — let the user pick via inline keyboard
     buttons = []
     for row in rows:
-        label    = row["nickname"] or f"{row['wallet_address'][:8]}…"
+        label    = row["nickname"] or f"{row['wallet_address'][:8]}\u2026"
         nick_val = row["nickname"] or ""
         buttons.append([
             InlineKeyboardButton(
-                f"📊 {label}",
+                f"\U0001f4ca {label}",
                 callback_data=f"hist:{row['wallet_address']}:{nick_val}",
             )
         ])
 
     await update.message.reply_text(
-        "🕐 *Trade History*\n\nWhich wallet would you like to check?",
+        "\U0001f550 *Trade History*\n\nWhich wallet would you like to check?",
         parse_mode=ParseMode.MARKDOWN_V2,
         reply_markup=InlineKeyboardMarkup(buttons),
     )
@@ -289,9 +294,9 @@ async def _send_history(message, wallet: str, nickname: str | None) -> None:
     Fetch the last 5 trades for *wallet* and reply with a formatted list.
     Falls back to plain text if MarkdownV2 parsing fails.
     """
-    short = f"`{wallet[:6]}…{wallet[-4:]}`"
+    short = f"`{wallet[:6]}\u2026{wallet[-4:]}`"
     sent = await message.reply_text(
-        f"🔍 Fetching last 5 trades for {short}\\.\\.\\.",
+        f"\U0001f50d Fetching last 5 trades for {short}\\.\\.\\.",
         parse_mode=ParseMode.MARKDOWN_V2,
     )
 
@@ -299,16 +304,16 @@ async def _send_history(message, wallet: str, nickname: str | None) -> None:
 
     if not trades:
         await sent.edit_text(
-            f"📭 No trades found for {short}\\.\n\n"
+            f"\U0001f4ed No trades found for {short}\\.\n\n"
             "_The wallet may have no activity, or the Polymarket API is "
             "temporarily unavailable\\. Try again in a moment\\._",
             parse_mode=ParseMode.MARKDOWN_V2,
         )
         return
 
-    wallet_disp = nickname or f"{wallet[:6]}…{wallet[-4:]}"
+    wallet_disp = nickname or f"{wallet[:6]}\u2026{wallet[-4:]}"
     count       = min(len(trades), 5)
-    lines       = [f"🕐 *Last {count} Trade{'s' if count > 1 else ''} — {_esc(wallet_disp)}*\n"]
+    lines       = [f"\U0001f550 *Last {count} Trade{'s' if count > 1 else ''} \u2014 {_esc(wallet_disp)}*\n"]
 
     for i, trade in enumerate(trades[:5], 1):
         t_type    = api.parse_trade_type(trade)
@@ -317,9 +322,8 @@ async def _send_history(message, wallet: str, nickname: str | None) -> None:
         size      = api.parse_trade_size(trade)
         outcome   = api.parse_trade_outcome(trade)
         ts        = api.parse_trade_timestamp(trade)
-        market_id = api.parse_market_id(trade)
 
-        emoji       = "💰" if t_type == "BUY" else "📉"
+        emoji       = "\U0001f4b0" if t_type == "BUY" else "\U0001f4c9"
         dt_str      = (
             datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%b %d, %H:%M UTC")
             if ts else "Unknown time"
@@ -327,12 +331,7 @@ async def _send_history(message, wallet: str, nickname: str | None) -> None:
         outcome_str = f" {_esc(outcome)}" if outcome else ""
         size_str    = f"{size:,.0f}" if size >= 1 else f"{size:.4f}"
 
-        market_title = None
-        if market_id:
-            try:
-                market_title = await api.fetch_market_title(market_id)
-            except Exception:
-                pass
+        market_title = api.get_trade_title(trade)
 
         lines.append(_build_trade_line(
             i, emoji, t_type, outcome_str, size_str,
@@ -340,7 +339,7 @@ async def _send_history(message, wallet: str, nickname: str | None) -> None:
         ))
 
     poly_url = f"https://polymarket.com/profile/{wallet}?tab=activity"
-    lines.append(f"\n[🔗 View full activity on Polymarket]({poly_url})")
+    lines.append(f"\n[\U0001f517 View full activity on Polymarket]({poly_url})")
 
     text = "\n".join(lines)
     try:
@@ -351,7 +350,6 @@ async def _send_history(message, wallet: str, nickname: str | None) -> None:
         )
     except Exception as exc:
         logger.warning("MarkdownV2 failed, sending plain text: %s", exc)
-        # Strip markup and send as plain text fallback
         plain = text.replace("*", "").replace("`", "").replace("\\", "")
         await sent.edit_text(plain, disable_web_page_preview=True)
 
@@ -367,12 +365,12 @@ async def callback_history(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     nickname = parts[2] if len(parts) > 2 and parts[2] else None
 
     if not wallet:
-        await query.edit_message_text("⚠️ Invalid selection\\.", parse_mode=ParseMode.MARKDOWN_V2)
+        await query.edit_message_text("\u26a0\ufe0f Invalid selection\\.", parse_mode=ParseMode.MARKDOWN_V2)
         return
 
-    short = f"`{wallet[:6]}…{wallet[-4:]}`"
+    short = f"`{wallet[:6]}\u2026{wallet[-4:]}`"
     await query.edit_message_text(
-        f"🔍 Fetching last 5 trades for {short}\\.\\.\\.",
+        f"\U0001f50d Fetching last 5 trades for {short}\\.\\.\\.",
         parse_mode=ParseMode.MARKDOWN_V2,
     )
 
@@ -380,14 +378,14 @@ async def callback_history(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     if not trades:
         await query.edit_message_text(
-            f"📭 No trades found for {short}\\.",
+            f"\U0001f4ed No trades found for {short}\\.",
             parse_mode=ParseMode.MARKDOWN_V2,
         )
         return
 
-    wallet_disp = nickname or f"{wallet[:6]}…{wallet[-4:]}"
+    wallet_disp = nickname or f"{wallet[:6]}\u2026{wallet[-4:]}"
     count       = min(len(trades), 5)
-    lines       = [f"🕐 *Last {count} Trade{'s' if count > 1 else ''} — {_esc(wallet_disp)}*\n"]
+    lines       = [f"\U0001f550 *Last {count} Trade{'s' if count > 1 else ''} \u2014 {_esc(wallet_disp)}*\n"]
 
     for i, trade in enumerate(trades[:5], 1):
         t_type    = api.parse_trade_type(trade)
@@ -396,9 +394,8 @@ async def callback_history(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         size      = api.parse_trade_size(trade)
         outcome   = api.parse_trade_outcome(trade)
         ts        = api.parse_trade_timestamp(trade)
-        market_id = api.parse_market_id(trade)
 
-        emoji       = "💰" if t_type == "BUY" else "📉"
+        emoji       = "\U0001f4b0" if t_type == "BUY" else "\U0001f4c9"
         dt_str      = (
             datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%b %d, %H:%M UTC")
             if ts else "Unknown time"
@@ -406,12 +403,7 @@ async def callback_history(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         outcome_str = f" {_esc(outcome)}" if outcome else ""
         size_str    = f"{size:,.0f}" if size >= 1 else f"{size:.4f}"
 
-        market_title = None
-        if market_id:
-            try:
-                market_title = await api.fetch_market_title(market_id)
-            except Exception:
-                pass
+        market_title = api.get_trade_title(trade)
 
         lines.append(_build_trade_line(
             i, emoji, t_type, outcome_str, size_str,
@@ -419,7 +411,7 @@ async def callback_history(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         ))
 
     poly_url = f"https://polymarket.com/profile/{wallet}?tab=activity"
-    lines.append(f"\n[🔗 View full activity on Polymarket]({poly_url})")
+    lines.append(f"\n[\U0001f517 View full activity on Polymarket]({poly_url})")
 
     text = "\n".join(lines)
     try:
@@ -444,7 +436,7 @@ async def cmd_remove_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     if not rows:
         await update.message.reply_text(
-            "📭 You have no wallets to remove\\.",
+            "\U0001f4ed You have no wallets to remove\\.",
             parse_mode=ParseMode.MARKDOWN_V2,
             reply_markup=_main_menu_keyboard(),
         )
@@ -453,17 +445,17 @@ async def cmd_remove_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     buttons = []
     for row in rows:
         addr  = row["wallet_address"]
-        label = row["nickname"] or f"{addr[:8]}…"
+        label = row["nickname"] or f"{addr[:8]}\u2026"
         buttons.append([
             InlineKeyboardButton(
-                f"🗑️ {label}",
+                f"\U0001f5d1\ufe0f {label}",
                 callback_data=f"remove:{row['id']}",
             )
         ])
-    buttons.append([InlineKeyboardButton("❌ Cancel", callback_data="remove:cancel")])
+    buttons.append([InlineKeyboardButton("\u274c Cancel", callback_data="remove:cancel")])
 
     await update.message.reply_text(
-        "🗑️ *Remove a Wallet*\n\nChoose which wallet to stop tracking:",
+        "\U0001f5d1\ufe0f *Remove a Wallet*\n\nChoose which wallet to stop tracking:",
         parse_mode=ParseMode.MARKDOWN_V2,
         reply_markup=InlineKeyboardMarkup(buttons),
     )
@@ -476,24 +468,24 @@ async def callback_remove_wallet(update: Update, context: ContextTypes.DEFAULT_T
     payload = query.data  # "remove:<id>" or "remove:cancel"
 
     if payload == "remove:cancel":
-        await query.edit_message_text("✅ No changes made\\.", parse_mode=ParseMode.MARKDOWN_V2)
+        await query.edit_message_text("\u2705 No changes made\\.", parse_mode=ParseMode.MARKDOWN_V2)
         return
 
     try:
         wallet_id = int(payload.split(":")[1])
     except (IndexError, ValueError):
-        await query.edit_message_text("⚠️ Invalid action\\.", parse_mode=ParseMode.MARKDOWN_V2)
+        await query.edit_message_text("\u26a0\ufe0f Invalid action\\.", parse_mode=ParseMode.MARKDOWN_V2)
         return
 
     removed = db.remove_wallet(wallet_id, user.id)
     if removed:
         await query.edit_message_text(
-            "✅ Wallet removed\\. You'll no longer receive alerts for it\\.",
+            "\u2705 Wallet removed\\. You'll no longer receive alerts for it\\.",
             parse_mode=ParseMode.MARKDOWN_V2,
         )
     else:
         await query.edit_message_text(
-            "⚠️ Wallet not found \\(maybe already removed\\?\\)\\.",
+            "\u26a0\ufe0f Wallet not found \\(maybe already removed\\?\\)\\.",
             parse_mode=ParseMode.MARKDOWN_V2,
         )
 
@@ -503,13 +495,17 @@ async def callback_remove_wallet(update: Update, context: ContextTypes.DEFAULT_T
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def conv_start_add(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Entry point: /add_wallet or ➕ Add Wallet button."""
-    user  = update.effective_user
+    """Entry point: /add_wallet or Add Wallet button."""
+    user = update.effective_user
+
+    # Always register the user first — handles DB resets and users who skip /start
+    db.upsert_user(user.id, user.username, update.effective_chat.id)
+
     count = db.count_wallets_for_user(user.id)
 
     if count >= MAX_WALLETS:
         await update.message.reply_text(
-            f"⚠️ You've reached the limit of *{MAX_WALLETS} wallets*\\.\n"
+            f"\u26a0\ufe0f You've reached the limit of *{MAX_WALLETS} wallets*\\.\n"
             "Please remove one before adding another\\.",
             parse_mode=ParseMode.MARKDOWN_V2,
             reply_markup=_main_menu_keyboard(),
@@ -518,10 +514,12 @@ async def conv_start_add(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     context.user_data.clear()
     await update.message.reply_text(
-        "➕ *Add Wallet — Step 1 of 4*\n\n"
-        "Please send me the Polymarket wallet address you want to track\\.\n"
-        "_Example: `0xAbCd1234`_\n\n"
-        "Tap *❌ Cancel* at any time to abort\\.",
+        "\u2795 *Add Wallet \u2014 Step 1 of 4*\n\n"
+        "Send me the *Polymarket proxy wallet* address to track\\.\n"
+        "_This is the `0x\u2026` address in your Polymarket profile URL \u2014 "
+        "not your MetaMask EOA\\._\n\n"
+        "Example: `/history 0xb76d3d56\u2026`\n\n"
+        "Tap *\u274c Cancel* at any time to abort\\.",
         parse_mode=ParseMode.MARKDOWN_V2,
         reply_markup=_cancel_keyboard(),
     )
@@ -532,17 +530,17 @@ async def conv_receive_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE
     text = update.message.text.strip()
 
     # If user tapped a menu button while conversation was active → cancel & re-route
-    if text in MENU_BUTTONS or text == "❌ Cancel":
+    if text in MENU_BUTTONS or text == "\u274c Cancel":
         await _cancel(update, context)
-        if text in MENU_BUTTONS and text != "❌ Cancel":
+        if text in MENU_BUTTONS and text != "\u274c Cancel":
             await handle_menu_text(update, context)
         return ConversationHandler.END
 
     if not WALLET_RE.match(text):
         await update.message.reply_text(
-            "❌ That doesn't look like a valid wallet address\\.\n"
+            "\u274c That doesn't look like a valid wallet address\\.\n"
             "It must start with `0x` followed by 40\\-42 hex characters\\.\n\n"
-            "Try again, or tap ❌ Cancel:",
+            "Try again, or tap \u274c Cancel:",
             parse_mode=ParseMode.MARKDOWN_V2,
         )
         return STATE_WALLET
@@ -551,8 +549,8 @@ async def conv_receive_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE
     existing = [r["wallet_address"] for r in db.get_wallets_for_user(update.effective_user.id)]
     if text.lower() in existing:
         await update.message.reply_text(
-            "⚠️ You're already tracking that wallet\\!\n"
-            "Send a different address, or tap ❌ Cancel:",
+            "\u26a0\ufe0f You're already tracking that wallet\\!\n"
+            "Send a different address, or tap \u274c Cancel:",
             parse_mode=ParseMode.MARKDOWN_V2,
         )
         return STATE_WALLET
@@ -560,7 +558,7 @@ async def conv_receive_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE
     context.user_data["wallet"] = text.lower()
 
     await update.message.reply_text(
-        "✅ *Step 2 of 4 — Nickname*\n\n"
+        "\u2705 *Step 2 of 4 \u2014 Nickname*\n\n"
         "Give this wallet a friendly nickname \\(e\\.g\\. `Whale 1`\\)\\.\n"
         "Or send /skip to use the short address\\.",
         parse_mode=ParseMode.MARKDOWN_V2,
@@ -572,16 +570,16 @@ async def conv_receive_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def conv_receive_nickname(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     text = update.message.text.strip()
 
-    if text in MENU_BUTTONS or text == "❌ Cancel":
+    if text in MENU_BUTTONS or text == "\u274c Cancel":
         await _cancel(update, context)
-        if text in MENU_BUTTONS and text != "❌ Cancel":
+        if text in MENU_BUTTONS and text != "\u274c Cancel":
             await handle_menu_text(update, context)
         return ConversationHandler.END
 
     context.user_data["nickname"] = None if text.lower() in ("/skip", "skip") else text[:32]
 
     await update.message.reply_text(
-        "✅ *Step 3 of 4 — Minimum Trade Size*\n\n"
+        "\u2705 *Step 3 of 4 \u2014 Minimum Trade Size*\n\n"
         "Only alert me when the trade value is at least how many USD?\n"
         "_Send a number like `100` or `0` for all trades\\._\n"
         "Or send /skip for no minimum\\.",
@@ -594,9 +592,9 @@ async def conv_receive_nickname(update: Update, context: ContextTypes.DEFAULT_TY
 async def conv_receive_min_usd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     text = update.message.text.strip()
 
-    if text in MENU_BUTTONS or text == "❌ Cancel":
+    if text in MENU_BUTTONS or text == "\u274c Cancel":
         await _cancel(update, context)
-        if text in MENU_BUTTONS and text != "❌ Cancel":
+        if text in MENU_BUTTONS and text != "\u274c Cancel":
             await handle_menu_text(update, context)
         return ConversationHandler.END
 
@@ -610,19 +608,19 @@ async def conv_receive_min_usd(update: Update, context: ContextTypes.DEFAULT_TYP
             context.user_data["min_usd"] = val
         except ValueError:
             await update.message.reply_text(
-                "❌ Please enter a valid positive number \\(e\\.g\\. `50` or `0`\\):",
+                "\u274c Please enter a valid positive number \\(e\\.g\\. `50` or `0`\\):",
                 parse_mode=ParseMode.MARKDOWN_V2,
             )
             return STATE_MIN_USD
 
     keyboard = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("✅ BUY trades only", callback_data="onlybuys:yes"),
-            InlineKeyboardButton("📊 All trades",       callback_data="onlybuys:no"),
+            InlineKeyboardButton("\u2705 BUY trades only", callback_data="onlybuys:yes"),
+            InlineKeyboardButton("\U0001f4ca All trades",   callback_data="onlybuys:no"),
         ]
     ])
     await update.message.reply_text(
-        "✅ *Step 4 of 4 — Trade Filter*\n\n"
+        "\u2705 *Step 4 of 4 \u2014 Trade Filter*\n\n"
         "Should I alert you only on *BUY* trades, or all trades \\(SELL included\\)?",
         parse_mode=ParseMode.MARKDOWN_V2,
         reply_markup=keyboard,
@@ -640,24 +638,27 @@ async def conv_receive_only_buys(update: Update, context: ContextTypes.DEFAULT_T
     nick      = context.user_data.get("nickname")
     min_usd   = context.user_data.get("min_usd", 0.0)
 
+    # Safety net: ensure user row exists (handles DB resets / first add without /start)
+    db.upsert_user(user.id, user.username, query.message.chat_id)
+
     success = db.add_wallet(user.id, wallet, nick, min_usd, only_buys)
 
-    nick_display = _esc(nick) if nick else f"`{wallet[:6]}…{wallet[-4:]}`"
+    nick_display = _esc(nick) if nick else f"`{wallet[:6]}\u2026{wallet[-4:]}`"
     filter_text  = "BUY trades only" if only_buys else "all trades"
     min_usd_text = f"${min_usd:,.0f}" if min_usd else "no minimum"
 
     if success:
         await query.edit_message_text(
-            f"🎉 *Wallet added successfully\\!*\n\n"
-            f"📍 *Name:*    {nick_display}\n"
-            f"💵 *Min size:* `{_esc(min_usd_text)}`\n"
-            f"🔍 *Filter:*  {_esc(filter_text)}\n\n"
-            "_I'll start sending alerts within 45 seconds\\._",
+            f"\U0001f389 *Wallet added successfully\\!*\n\n"
+            f"\U0001f4cd *Name:*    {nick_display}\n"
+            f"\U0001f4b5 *Min size:* `{_esc(min_usd_text)}`\n"
+            f"\U0001f50d *Filter:*  {_esc(filter_text)}\n\n"
+            "_I'll send alerts within 20 seconds of a new trade\\._",
             parse_mode=ParseMode.MARKDOWN_V2,
         )
     else:
         await query.edit_message_text(
-            "⚠️ Could not add wallet \\(it may already be tracked\\)\\.",
+            "\u26a0\ufe0f Could not add wallet \u2014 it may already be tracked\\.",
             parse_mode=ParseMode.MARKDOWN_V2,
         )
 
@@ -675,7 +676,7 @@ async def conv_receive_only_buys(update: Update, context: ContextTypes.DEFAULT_T
 async def _cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data.clear()
     await update.message.reply_text(
-        "❌ Cancelled\\. No changes were made\\.",
+        "\u274c Cancelled\\. No changes were made\\.",
         parse_mode=ParseMode.MARKDOWN_V2,
         reply_markup=_main_menu_keyboard(),
     )
@@ -690,19 +691,19 @@ async def handle_menu_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     """Route taps on the persistent reply keyboard to the right handler."""
     text = update.message.text
 
-    if text == "➕ Add Wallet":
+    if text == "\u2795 Add Wallet":
         await conv_start_add(update, context)
-    elif text == "📋 My Wallets":
+    elif text == "\U0001f4cb My Wallets":
         await cmd_my_wallets(update, context)
-    elif text == "🗑️ Remove Wallet":
+    elif text == "\U0001f5d1\ufe0f Remove Wallet":
         await cmd_remove_wallet(update, context)
-    elif text == "🕐 History":
+    elif text == "\U0001f550 History":
         await cmd_history(update, context)
-    elif text == "❓ Help":
+    elif text == "\u2753 Help":
         await cmd_help(update, context)
     else:
         await update.message.reply_text(
-            "🤔 I didn't understand that\\. Use the menu below or /help\\.",
+            "\U0001f914 I didn't understand that\\. Use the menu below or /help\\.",
             parse_mode=ParseMode.MARKDOWN_V2,
             reply_markup=_main_menu_keyboard(),
         )
@@ -726,10 +727,10 @@ def format_trade_alert(
 ) -> str:
     """
     Build the MarkdownV2 alert message sent to the user on new trades.
-    Uses ≈ instead of ~ to show 'approximately' — avoids strikethrough parser.
+    Uses \u2248 instead of ~ to show 'approximately' — avoids strikethrough parser.
     """
-    emoji       = "💰" if trade_type == "BUY" else "📉"
-    wallet_disp = nickname or f"{wallet_address[:6]}…{wallet_address[-4:]}"
+    emoji       = "\U0001f4b0" if trade_type == "BUY" else "\U0001f4c9"
+    wallet_disp = nickname or f"{wallet_address[:6]}\u2026{wallet_address[-4:]}"
     dt_str      = (
         datetime.fromtimestamp(timestamp, tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
         if timestamp else "Unknown time"
@@ -739,18 +740,18 @@ def format_trade_alert(
 
     title_part = ""
     if market_title:
-        truncated  = market_title[:60] + ("…" if len(market_title) > 60 else "")
-        title_part = f"\n    • {_esc(truncated)}"
+        truncated  = market_title[:60] + ("\u2026" if len(market_title) > 60 else "")
+        title_part = f"\n    \u2022 {_esc(truncated)}"
 
     return "\n".join([
-        "🔔 *New Polymarket Trade\\!*\n",
-        f"👤 *Wallet:* {_esc(wallet_disp)}",
-        f"    `{wallet_address[:6]}…{wallet_address[-4:]}`\n",
-        f"{emoji} *{_esc(trade_type)}*{outcome_str} — "
+        "\U0001f514 *New Polymarket Trade\\!*\n",
+        f"\U0001f464 *Wallet:* {_esc(wallet_disp)}",
+        f"    `{wallet_address[:6]}\u2026{wallet_address[-4:]}`\n",
+        f"{emoji} *{_esc(trade_type)}*{outcome_str} \u2014 "
         f"`{_esc(size_str)}` shares @ `${price:.3f}`{title_part}\n",
-        f"💵 *Value:* ≈`${usd_value:,.2f}`",
-        f"📅 {_esc(dt_str)}\n",
-        f"[🔗 View wallet activity]({polymarket_url})",
+        f"\U0001f4b5 *Value:* \u2248`${usd_value:,.2f}`",
+        f"\U0001f4c5 {_esc(dt_str)}\n",
+        f"[\U0001f517 View wallet activity]({polymarket_url})",
     ])
 
 
@@ -763,14 +764,17 @@ def build_add_wallet_conversation() -> ConversationHandler:
 
     # Any menu button tap while in a conversation gracefully cancels it
     menu_fallback = MessageHandler(
-        filters.Regex(r"^(➕ Add Wallet|📋 My Wallets|🗑️ Remove Wallet|🕐 History|❓ Help|❌ Cancel)$"),
+        filters.Regex(
+            r"^(\u2795 Add Wallet|\U0001f4cb My Wallets|\U0001f5d1\ufe0f Remove Wallet"
+            r"|\U0001f550 History|\u2753 Help|\u274c Cancel)$"
+        ),
         _cancel,
     )
 
     return ConversationHandler(
         entry_points=[
             CommandHandler("add_wallet", conv_start_add),
-            MessageHandler(filters.Regex(r"^➕ Add Wallet$"), conv_start_add),
+            MessageHandler(filters.Regex(r"^\u2795 Add Wallet$"), conv_start_add),
         ],
         states={
             STATE_WALLET: [
