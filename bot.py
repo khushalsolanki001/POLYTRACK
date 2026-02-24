@@ -106,6 +106,8 @@ from handlers import (
     cmd_start,
     cmd_help,
     cmd_my_wallets,
+    cmd_history,
+    callback_history,
     cmd_remove_wallet,
     callback_remove_wallet,
     handle_menu_text,
@@ -280,13 +282,15 @@ def main() -> None:
     app.add_handler(build_add_wallet_conversation())
 
     # 2. Simple command handlers
-    app.add_handler(CommandHandler("start",       cmd_start))
-    app.add_handler(CommandHandler("help",        cmd_help))
-    app.add_handler(CommandHandler("my_wallets",  cmd_my_wallets))
-    app.add_handler(CommandHandler("remove_wallet", cmd_remove_wallet))
+    app.add_handler(CommandHandler("start",          cmd_start))
+    app.add_handler(CommandHandler("help",           cmd_help))
+    app.add_handler(CommandHandler("my_wallets",     cmd_my_wallets))
+    app.add_handler(CommandHandler("history",        cmd_history))
+    app.add_handler(CommandHandler("remove_wallet",  cmd_remove_wallet))
 
     # 3. Inline button callbacks
     app.add_handler(CallbackQueryHandler(callback_remove_wallet, pattern=r"^remove:"))
+    app.add_handler(CallbackQueryHandler(callback_history,       pattern=r"^hist:"))
 
     # 4. Reply keyboard button text routing (catch-all text messages)
     app.add_handler(
