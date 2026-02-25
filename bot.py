@@ -326,8 +326,7 @@ async def _notify_startup(app) -> None:
         try:
             await app.bot.send_message(
                 chat_id=cid,
-                text="🟢 *PolyTrack is online\!*
-Wallet monitoring has resumed\.",
+                text="🟢 *PolyTrack is online\\!*\nWallet monitoring has resumed\\.",
                 parse_mode="MarkdownV2",
             )
         except Exception as exc:
