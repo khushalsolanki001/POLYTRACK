@@ -161,6 +161,14 @@ async def poll_trades(context) -> None:
       3. For genuinely NEW trades: apply filters, send alert.
       4. Persist updated last_timestamp so we never re-alert.
     """
+    try:
+        await _poll_trades_inner(context)
+    except Exception as exc:
+        logger.error("💥 Unhandled crash in poll_trades: %s", exc, exc_info=True)
+
+
+async def _poll_trades_inner(context) -> None:
+    """Inner polling logic — wrapped by poll_trades for crash safety."""
     import time as _time
 
     bot: Bot = context.bot
@@ -185,7 +193,7 @@ async def poll_trades(context) -> None:
         logger.info("  Checking: %s (last_ts=%d)", label, last_ts)
 
         try:
-            trades = await api.fetch_trades(address, limit=20)
+            trades = await api.fetch_trades(address, limit=50)
         except Exception as exc:
             logger.error("API error for %s: %s", label, exc)
             continue
@@ -306,6 +314,26 @@ async def poll_trades(context) -> None:
 #  Application bootstrap
 # ─────────────────────────────────────────────────────────────────────────────
 
+async def _notify_startup(app) -> None:
+    """Send a startup notification to every tracked user."""
+    wallets = db.get_all_wallets()
+    notified = set()
+    for row in wallets:
+        cid = row["chat_id"]
+        if cid in notified:
+            continue
+        notified.add(cid)
+        try:
+            await app.bot.send_message(
+                chat_id=cid,
+                text="🟢 *PolyTrack is online\!*
+Wallet monitoring has resumed\.",
+                parse_mode="MarkdownV2",
+            )
+        except Exception as exc:
+            logger.warning("Could not send startup ping to %s: %s", cid, exc)
+
+
 def main() -> None:
     if not BOT_TOKEN:
         logger.critical(
@@ -357,6 +385,11 @@ def main() -> None:
         first    = 5,           # first run just 5 s after startup
         name     = "poll_trades",
     )
+
+    # ── Send startup notification to all tracked users ────────────────────
+    async def _post_init(app):
+        await _notify_startup(app)
+    app.post_init = _post_init
 
     # ── Global error handler (logs all unhandled exceptions) ──────────────
     async def _error_handler(update, context) -> None:
