@@ -110,6 +110,7 @@ from telegram.constants import ParseMode
 
 import db
 import api
+import scanner
 from handlers import (
     cmd_start,
     cmd_help,
@@ -378,16 +379,12 @@ def main() -> None:
     )
 
     # ── Background polling job ─────────────────────────────────────────────
-    app.job_queue.run_repeating(
-        poll_trades,
-        interval = POLL_INTERVAL,
-        first    = 5,           # first run just 5 s after startup
-        name     = "poll_trades",
-    )
-
+    # We remove the old REST API polling job and use the Web3 loop instead.
+    
     # ── Send startup notification to all tracked users ────────────────────
     async def _post_init(app):
         await _notify_startup(app)
+        asyncio.create_task(scanner.run_block_scanner(app))
     app.post_init = _post_init
 
     # ── Global error handler (logs all unhandled exceptions) ──────────────
