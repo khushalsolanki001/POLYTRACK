@@ -18,6 +18,4 @@ def get_trades(user):
         print(f"Error for {user}: {e.reason}")
 
 print("Checking live trades directly from Polymarket API...")
-get_trades("0x7b235aa8730fa67f815695746738fb14f7ce1efe")
-get_trades("0xb76d3d5608c96389633b3b99efa0d93f373bfd8d")
-get_trades("0xc1016d1bfc6244fd51fcf5c8dc1b10afc52be6d1")
+
