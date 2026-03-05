@@ -9,7 +9,7 @@ if not w3.is_connected():
     exit(1)
 
 # A proxy wallet
-wallet = "0x0000000000000000000000000000000000000000"
+wallet = "0x7b235aa8730fa67f815695746738fb14f7ce1efe"
 wallet_padded = '0x000000000000000000000000' + wallet[2:]
 
 print("Latest block:", w3.eth.block_number)

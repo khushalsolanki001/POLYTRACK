@@ -85,4 +85,4 @@ async def scan_blocks(tracked_wallets: list[str], start_block: int = None):
 if __name__ == "__main__":
     # Fake wallet to watch or test
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(scan_blocks(["0x0000000000000000000000000000000000000000"]))
+    loop.run_until_complete(scan_blocks(["0xd2d75a43ba5addf54b4194c7b8aa6db8a2b5e28a"]))
