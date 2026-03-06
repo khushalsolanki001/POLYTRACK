@@ -205,6 +205,8 @@ polytrack/
 
 ---
 
+some more features are coming soon
+
 ## 📜 License
 
 MIT — free to use, modify, and distribute.
