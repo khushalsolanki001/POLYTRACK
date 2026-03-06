@@ -1,7 +1,7 @@
 import json
 import urllib.request
 from urllib.error import URLError
-
+// This script checks the latest trades for a list of users directly from the Polymarket API.
 def get_trades(user):
     url = f"https://data-api.polymarket.com/trades?user={user}&limit=5"
     try:
