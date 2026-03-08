@@ -18,4 +18,5 @@ def get_trades(user):
         print(f"Error for {user}: {e.reason}")
 
 print("Checking live trades directly from Polymarket API...")
+// List of users to check
 
