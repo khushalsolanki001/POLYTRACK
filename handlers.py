@@ -114,9 +114,8 @@ def _build_trade_line(
         title_line = f"\n    \u2022 {_esc(truncated)}"
 
     return (
-        f"*{i}\\.*  {emoji} *{_esc(t_type)}*{outcome_str} \u2014 "
-        f"`{_esc(size_str)}` shares @ `${price:.3f}`{title_line}\n"
-        f"    \U0001f4b5 \u2248`${usd_value:,.2f}` \\| \U0001f4c5 {_esc(dt_str)}"
+        f"*{i}\\.* {emoji} *{_esc(t_type)}*{outcome_str} \\| `{size_str}` sh @ `${price:.3f}`{title_line}\n"
+        f"    💵 \u2248`${usd_value:,.2f}` \\| ⏱ `{_esc(dt_str)}`"
     )
 
 
@@ -729,19 +728,20 @@ def format_trade_alert(
     Build the MarkdownV2 alert message sent to the user on new trades.
     Uses \u2248 instead of ~ to show 'approximately' — avoids strikethrough parser.
     """
-    emoji       = "\U0001f4b0" if trade_type == "BUY" else "\U0001f4c9"
+    emoji       = "\U0001f7e2" if trade_type == "BUY" else "\U0001f534"
     wallet_disp = nickname or f"{wallet_address[:6]}\u2026{wallet_address[-4:]}"
     dt_str      = (
         datetime.fromtimestamp(timestamp, tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
         if timestamp else "Unknown time"
     )
+    # Do not _esc these as they are inside `` backticks
     size_str    = f"{size:,.0f}" if size >= 1 else f"{size:.4f}"
-    outcome_str = f" {_esc(outcome)}" if outcome else ""
+    
+    def _esc_code(text: str) -> str:
+        return str(text).replace('\\', '\\\\').replace('`', '\\`')
 
-    title_part = ""
-    if market_title:
-        truncated  = market_title[:60] + ("\u2026" if len(market_title) > 60 else "")
-        title_part = f"\n    \u2022 {_esc(truncated)}"
+    outcome_str = f" `{_esc_code(outcome)}`" if outcome else ""
+    market_str  = _esc(market_title) if market_title else "Unknown Market"
 
     # Show how long ago the trade happened vs now (Polymarket API indexing lag)
     import time as _time
@@ -755,14 +755,16 @@ def format_trade_alert(
         age_str = f"{age_secs // 3600}h ago"
 
     return "\n".join([
-        "\U0001f514 *New Polymarket Trade\\!*\n",
-        f"\U0001f464 *Wallet:* {_esc(wallet_disp)}",
-        f"    `{wallet_address[:6]}\u2026{wallet_address[-4:]}`\n",
-        f"{emoji} *{_esc(trade_type)}*{outcome_str} \u2014 "
-        f"`{_esc(size_str)}` shares @ `${price:.3f}`{title_part}\n",
-        f"\U0001f4b5 *Value:* \u2248`${usd_value:,.2f}`",
-        f"\U0001f4c5 *Traded:* {_esc(dt_str)} _\\({_esc(age_str)}\\)_\n",
-        f"[\U0001f517 View wallet activity]({polymarket_url})",
+        "🚨 *NEW POLYMARKET TRADE* 🚨\n",
+        f"👤 *Wallet:* ` {_esc_code(wallet_disp)} `",
+        f"      ↳ ` {wallet_address[:6]}\u2026{wallet_address[-4:]} `\n",
+        f"📊 *Market:* *{market_str}*",
+        f"🎯 *Action:* {emoji} *{_esc(trade_type)}*{outcome_str}",
+        f"💰 *Size:* `{size_str}` shares",
+        f"💲 *Price:* `${price:.3f}`",
+        f"💵 *Value:* \u2248`${usd_value:,.2f}`\n",
+        f"⏱ *Time:* `{_esc_code(dt_str)}` _\\({_esc(age_str)}\\)_",
+        f"\n🔗 [\U0001f517 View Activity]({polymarket_url})",
     ])
 
 
