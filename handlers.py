@@ -91,6 +91,10 @@ def _esc(text: str) -> str:
     special = r"\_*[]()~`>#+-=|{}.!"
     return "".join(f"\\{c}" if c in special else c for c in str(text))
 
+def _esc_code(text: str) -> str:
+    """Escape special MarkdownV2 characters for use INSIDE code blocks."""
+    return str(text).replace('\\', '\\\\').replace('`', '\\`')
+
 
 def _build_trade_line(
     i: int,
@@ -115,7 +119,7 @@ def _build_trade_line(
 
     return (
         f"*{i}\\.* {emoji} *{_esc(t_type)}*{outcome_str} \\| `{size_str}` sh @ `${price:.3f}`{title_line}\n"
-        f"    💵 \u2248`${usd_value:,.2f}` \\| ⏱ `{_esc(dt_str)}`"
+        f"    💵 \u2248`${usd_value:,.2f}` \\| ⏱ `{_esc_code(dt_str)}`"
     )
 
 
@@ -737,9 +741,6 @@ def format_trade_alert(
     # Do not _esc these as they are inside `` backticks
     size_str    = f"{size:,.0f}" if size >= 1 else f"{size:.4f}"
     
-    def _esc_code(text: str) -> str:
-        return str(text).replace('\\', '\\\\').replace('`', '\\`')
-
     outcome_str = f" `{_esc_code(outcome)}`" if outcome else ""
     market_str  = _esc(market_title) if market_title else "Unknown Market"
 
